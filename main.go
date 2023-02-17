@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/mabouchacra/dogwatch/api"
 )
 
 func main() {
-	api.GetLogBasedMetricVolume()
+	metrics := api.GetLogBasedMetricVolumeWithLimit(500)
+	fmt.Println(metrics)
 }

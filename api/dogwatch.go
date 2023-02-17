@@ -10,8 +10,12 @@ import (
 	"github.com/DataDog/datadog-api-client-go/v2/api/datadogV2"
 )
 
-func GetLogBasedMetricVolume() {
+type SimpleMetric struct {
+	name   string
+	volume int64
+}
 
+func initDDcnx() (context.Context, *datadog.APIClient) {
 	ctx := context.WithValue(
 		context.Background(),
 		datadog.ContextAPIKeys,
@@ -27,21 +31,34 @@ func GetLogBasedMetricVolume() {
 
 	configuration := datadog.NewConfiguration()
 	apiClient := datadog.NewAPIClient(configuration)
+	return ctx, apiClient
+}
 
-	metrics := getLogBasedMetrics(ctx, apiClient)
+func GetLogBasedMetricVolume() {
+	GetLogBasedMetricVolumeWithLimit(-1)
+}
 
-	for _, metric := range metrics {
+func GetLogBasedMetricVolumeWithLimit(lowerLimit int) []SimpleMetric {
+	ctx, apiClient := initDDcnx()
+
+	metricsResponse := getLogBasedMetrics(ctx, apiClient)
+
+	var metrics []SimpleMetric
+
+	for _, metric := range metricsResponse {
 		response := getMetricVolume(metric.GetId(), ctx, apiClient)
 		if response.Data.MetricDistinctVolume != nil {
 
-			fmt.Printf("Metric %s - ", metric.GetId())
-			fmt.Printf("volume %d \n", *response.Data.MetricDistinctVolume.Attributes.DistinctVolume)
+			volume := *response.Data.MetricDistinctVolume.Attributes.DistinctVolume
+			if volume >= int64(lowerLimit) {
+				metrics = append(metrics, SimpleMetric{metric.GetId(), volume})
+			}
 		} else {
 			responseContent, _ := json.MarshalIndent(response, "", "  ")
-			fmt.Printf("Error deserializing metric %s - raw value : %s\n", metric.GetId(), &responseContent)
+			fmt.Fprintf(os.Stderr, "Error deserializing metric %s - raw value : %s\n", metric.GetId(), &responseContent)
 		}
 	}
-
+	return metrics
 }
 
 func getLogBasedMetrics(ctx context.Context, apiClient *datadog.APIClient) []datadogV2.LogsMetricResponseData {
